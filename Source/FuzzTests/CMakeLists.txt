@@ -1,0 +1,272 @@
+if(APPLE)
+	list(APPEND LIBS ${FOUNDATION_LIBRARY} ${CORESERV_LIBRARY})
+endif()
+file(MAKE_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/FuzzTests)
+
+macro(add_dolphin_fuzz_test target srcs)
+	# Since this is a Core dependency, it can't be linked as a library and has
+	# to be linked as an object file. Otherwise CMake inserts the library after
+	# core, but before other core dependencies like videocommon which also use
+	# Host_ functions.
+	set(
+		srcs2
+		${srcs}
+		${CMAKE_SOURCE_DIR}/Source/FuzzTests/FuzzUtils/Harness.cpp
+		
+		# TODO: this is a big hack, just so we can get the fuzzer to compile
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/Analytics.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/BreakPoints.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/CDUtils.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/ColorUtil.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/ENetUtil.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/FileSearch.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/FileUtil.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/GekkoDisassembler.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/Hash.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/IniFile.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/JitRegister.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/MathUtil.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/MemArena.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/MemoryUtil.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/Misc.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/MsgHandler.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/NandPaths.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/Network.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/PcapFile.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/PerformanceCounter.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/Profiler.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/SettingsHandler.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/SDCardUtil.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/StringUtil.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/SymbolDB.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/SysConf.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/Thread.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/Timer.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/TraversalClient.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/Version.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/x64ABI.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/x64Emitter.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/MD5.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/Crypto/bn.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/Crypto/ec.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Common/Logging/LogManager.cpp
+
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/ActionReplay.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/Analytics.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/ARDecrypt.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/BootManager.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/ConfigManager.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/Core.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/CoreTiming.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSPEmulator.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/ec_wii.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/GeckoCodeConfig.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/GeckoCode.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HotkeyManager.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/MemTools.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/Movie.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/NetPlayClient.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/NetPlayServer.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PatchEngine.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/State.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/Boot/Boot_BS2Emu.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/Boot/Boot.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/Boot/Boot_DOL.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/Boot/Boot_ELF.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/Boot/Boot_WiiWAD.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/Boot/ElfReader.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/Debugger/Debugger_SymbolMap.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/Debugger/Dump.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/Debugger/PPCDebugInterface.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPAssembler.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPDisassembler.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPAccelerator.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPCaptureLogger.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPIntCCUtil.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPIntExtOps.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPHWInterface.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPMemoryMap.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPStacks.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPAnalyzer.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPIntArithmetic.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPIntBranch.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPIntLoadStore.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPIntMisc.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPIntMultiplier.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPEmitter.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPCodeUtil.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/LabelMap.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPInterpreter.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPCore.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/DSPTables.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/Jit/DSPJitRegCache.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/Jit/DSPJitExtOps.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/Jit/DSPJitBranch.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/Jit/DSPJitCCUtil.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/Jit/DSPJitArithmetic.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/Jit/DSPJitLoadStore.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/Jit/DSPJitMultiplier.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/Jit/DSPJitUtil.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/DSP/Jit/DSPJitMisc.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/FifoPlayer/FifoAnalyzer.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/FifoPlayer/FifoDataFile.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/FifoPlayer/FifoPlaybackAnalyzer.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/FifoPlayer/FifoPlayer.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/FifoPlayer/FifoRecordAnalyzer.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/FifoPlayer/FifoRecorder.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HLE/HLE.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HLE/HLE_Misc.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HLE/HLE_OS.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/AudioInterface.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/CPU.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSP.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSPHLE/UCodes/AX.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSPHLE/UCodes/AXWii.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSPHLE/UCodes/CARD.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSPHLE/UCodes/GBA.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSPHLE/UCodes/INIT.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSPHLE/UCodes/ROM.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSPHLE/UCodes/UCodes.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSPHLE/UCodes/Zelda.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSPHLE/MailHandler.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSPHLE/DSPHLE.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSPLLE/DSPDebugInterface.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSPLLE/DSPHost.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSPLLE/DSPSymbols.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSPLLE/DSPLLEGlobals.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSPLLE/DSPLLE.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DSPLLE/DSPLLETools.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DVDInterface.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/DVDThread.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/EXI_Channel.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/EXI.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/EXI_Device.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/EXI_DeviceAD16.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/EXI_DeviceAGP.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/EXI_DeviceEthernet.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/EXI_DeviceGecko.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/EXI_DeviceIPL.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/EXI_DeviceMemoryCard.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/EXI_DeviceMic.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/GCKeyboard.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/GCKeyboardEmu.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/GCMemcard.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/GCMemcardDirectory.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/GCMemcardRaw.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/GCPad.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/GCPadEmu.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/GPFifo.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/HW.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/Memmap.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/MemoryInterface.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/MMIO.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/ProcessorInterface.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/SI.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/SI_Device.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/SI_DeviceDanceMat.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/SI_DeviceGBA.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/SI_DeviceGCAdapter.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/SI_DeviceGCController.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/SI_DeviceGCSteeringWheel.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/SI_DeviceKeyboard.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/Sram.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/StreamADPCM.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/SystemTimers.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/VideoInterface.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/WII_IPC.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/Wiimote.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/WiimoteEmu/Attachment/Classic.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/WiimoteEmu/Attachment/Attachment.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/WiimoteEmu/Attachment/Nunchuk.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/WiimoteEmu/Attachment/Drums.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/WiimoteEmu/Attachment/Guitar.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/WiimoteEmu/Attachment/Turntable.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/WiimoteEmu/EmuSubroutines.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/WiimoteEmu/Encryption.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/WiimoteEmu/Speaker.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/WiimoteReal/WiimoteReal.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/HW/WiiSaveCrypted.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/ICMPLin.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/NWC24Config.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE_Device.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE_Device_stub.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE_Device_DI.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE_Device_es.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE_Device_FileIO.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE_Device_fs.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_Socket.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE_Device_net.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE_Device_net_ssl.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE_Device_stm.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE_Device_sdio_slot0.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE_Device_usb_bt_base.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE_Device_usb_bt_emu.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE_Device_usb_bt_stub.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE_Device_usb_kbd.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE_Device_usb_ven.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WII_IPC_HLE_WiiMote.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WiiMote_HID_Attr.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/IPC_HLE/WiiNetConfig.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/MMU.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/PowerPC.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/PPCAnalyst.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/PPCCache.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/PPCSymbolDB.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/PPCTables.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/Profiler.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/SignatureDB.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/JitInterface.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/Interpreter/Interpreter_Branch.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/Interpreter/Interpreter.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/Interpreter/Interpreter_FloatingPoint.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/Interpreter/Interpreter_Integer.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/Interpreter/Interpreter_LoadStore.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/Interpreter/Interpreter_LoadStorePaired.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/Interpreter/Interpreter_Paired.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/Interpreter/Interpreter_SystemRegisters.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/Interpreter/Interpreter_Tables.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/JitCommon/JitAsmCommon.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/JitCommon/JitBase.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/JitCommon/JitCache.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/CachedInterpreter.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/JitILCommon/IR.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/JitILCommon/JitILBase_Branch.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/JitILCommon/JitILBase_LoadStore.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/JitILCommon/JitILBase_SystemRegisters.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/JitILCommon/JitILBase_LoadStoreFloating.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/JitILCommon/JitILBase_LoadStorePaired.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/JitILCommon/JitILBase_Paired.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/JitILCommon/JitILBase_FloatingPoint.cpp
+		${CMAKE_SOURCE_DIR}/Source/Core/Core/PowerPC/JitILCommon/JitILBase_Integer.cpp
+	)
+	add_executable(Fuzz_${target} EXCLUDE_FROM_ALL ${srcs2})
+	set_target_properties(Fuzz_${target} PROPERTIES OUTPUT_NAME FuzzTests/${target})
+	target_link_libraries(Fuzz_${target} ${LIBS})
+	add_dependencies(fuzztests Fuzz_${target})
+	add_test(NAME ${target} COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/FuzzTests/${target})
+endmacro(add_dolphin_fuzz_test)
+
+set(LIBS
+	audiocommon
+	bdisasm
+	common
+	discio
+	enet
+	inputcommon
+	${LZO}
+	sfml-network
+	sfml-system
+	videonull
+	videoogl
+	videosoftware
+	z
+	)
+
+if(PORTAUDIO_FOUND)
+	set(LIBS ${LIBS} ${PORTAUDIO_LIBRARIES})
+endif(PORTAUDIO_FOUND)
+
+add_subdirectory(ElfLoader)
+add_subdirectory(DolLoader)

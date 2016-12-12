@@ -51,6 +51,7 @@ if (ANDROID)
 	add_subdirectory(Android/jni)
 endif()
 add_subdirectory(UnitTests)
+add_subdirectory(FuzzTests)
 
 if (DSPTOOL)
 	add_subdirectory(DSPTool)

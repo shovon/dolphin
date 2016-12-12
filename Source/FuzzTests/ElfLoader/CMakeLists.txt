@@ -1,0 +1,1 @@
+add_dolphin_fuzz_test(ElfLoaderFuzzTest ElfLoaderFuzzTest.cpp)
