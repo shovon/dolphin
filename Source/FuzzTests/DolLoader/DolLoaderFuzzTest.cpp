@@ -1,301 +1,253 @@
-#include "Core/Boot/Boot_DOL.h"
-#include "DiscIO/NANDContentLoader.h"
-#include "DiscIO/Enums.h"
-#include "Common/CommonFuncs.h"
-#include "Common/CommonPaths.h"
-#include "Common/FileUtil.h"
-#include "Core/Boot/ElfReader.h"
-#include "Core/PowerPC/Gekko.h"
-#include "Core/PowerPC/PowerPC.h"
-#include "Core/PowerPC/PPCSymbolDB.h"
-#include "Core/HLE/HLE.h"
+// Copyright 2008 Dolphin Emulator Project
+// Licensed under GPLv2+
+// Refer to the license.txt file included.
+
+#include <cstddef>
+#include <cstdio>
+#include <cstring>
+#include <getopt.h>
+#include <signal.h>
+#include <string>
+#include <thread>
+#include <unistd.h>
+
+#include "Common/CommonTypes.h"
+#include "Common/Event.h"
+#include "Common/Flag.h"
+#include "Common/Logging/LogManager.h"
+#include "Common/MsgHandler.h"
+
+#include "Core/Analytics.h"
+#include "Core/BootManager.h"
 #include "Core/ConfigManager.h"
-#include "Core/IPC_HLE/WII_IPC_HLE_Device_es.h"
-#include "Core/HW/DVDInterface.h"
+#include "Core/Core.h"
+#include "Core/HW/Wiimote.h"
+#include "Core/Host.h"
+#include "Core/IPC_HLE/WII_IPC_HLE.h"
+#include "Core/IPC_HLE/WII_IPC_HLE_Device_stm.h"
+#include "Core/IPC_HLE/WII_IPC_HLE_Device_usb_bt_emu.h"
+#include "Core/IPC_HLE/WII_IPC_HLE_WiiMote.h"
+#include "Core/State.h"
 
-// bool EmulatedBS2_Wii()
-// {
-//   INFO_LOG(BOOT, "Faking Wii BS2...");
+#include "UICommon/UICommon.h"
 
-//   // Setup Wii memory
-//   DiscIO::Country country_code = DiscIO::Country::COUNTRY_UNKNOWN;
-//   if (DVDInterface::VolumeIsValid())
-//     country_code = DVDInterface::GetVolume().GetCountry();
-//   if (SetupWiiMemory(country_code) == false)
-//     return false;
+#include "VideoCommon/RenderBase.h"
+#include "VideoCommon/VideoBackendBase.h"
 
-//   // Execute the apploader
-//   bool apploaderRan = false;
-//   if (DVDInterface::VolumeIsValid() &&
-//       DVDInterface::GetVolume().GetVolumeType() == DiscIO::Platform::WII_DISC)
-//   {
-//     // This is some kind of consistency check that is compared to the 0x00
-//     // values as the game boots. This location keeps the 4 byte ID for as long
-//     // as the game is running. The 6 byte ID at 0x00 is overwritten sometime
-//     // after this check during booting.
-//     DVDRead(0, 0x3180, 4, true);
+static bool rendererHasFocus = true;
+static bool rendererIsFullscreen = false;
+static Common::Flag s_running{true};
+static Common::Flag s_shutdown_requested{false};
+static Common::Flag s_tried_graceful_shutdown{false};
 
-//     // Set up MSR and the BAT SPR registers.
-//     UReg_MSR& m_MSR = ((UReg_MSR&)PowerPC::ppcState.msr);
-//     m_MSR.FP = 1;
-//     m_MSR.DR = 1;
-//     m_MSR.IR = 1;
-//     m_MSR.EE = 1;
-//     PowerPC::ppcState.spr[SPR_IBAT0U] = 0x80001fff;
-//     PowerPC::ppcState.spr[SPR_IBAT0L] = 0x00000002;
-//     PowerPC::ppcState.spr[SPR_IBAT4U] = 0x90001fff;
-//     PowerPC::ppcState.spr[SPR_IBAT4L] = 0x10000002;
-//     PowerPC::ppcState.spr[SPR_DBAT0U] = 0x80001fff;
-//     PowerPC::ppcState.spr[SPR_DBAT0L] = 0x00000002;
-//     PowerPC::ppcState.spr[SPR_DBAT1U] = 0xc0001fff;
-//     PowerPC::ppcState.spr[SPR_DBAT1L] = 0x0000002a;
-//     PowerPC::ppcState.spr[SPR_DBAT4U] = 0x90001fff;
-//     PowerPC::ppcState.spr[SPR_DBAT4L] = 0x10000002;
-//     PowerPC::ppcState.spr[SPR_DBAT5U] = 0xd0001fff;
-//     PowerPC::ppcState.spr[SPR_DBAT5L] = 0x1000002a;
-//     PowerPC::DBATUpdated();
-//     PowerPC::IBATUpdated();
-
-//     Memory::Write_U32(0x4c000064, 0x00000300);  // Write default DSI Handler:     rfi
-//     Memory::Write_U32(0x4c000064, 0x00000800);  // Write default FPU Handler:     rfi
-//     Memory::Write_U32(0x4c000064, 0x00000C00);  // Write default Syscall Handler: rfi
-
-//     HLE::Patch(0x81300000, "OSReport");  // HLE OSReport for Apploader
-
-//     PowerPC::ppcState.gpr[1] = 0x816ffff0;  // StackPointer
-
-//     const u32 apploader_offset = 0x2440;  // 0x1c40;
-
-//     // Load Apploader to Memory
-//     const DiscIO::IVolume& volume = DVDInterface::GetVolume();
-//     u32 apploader_entry, apploader_size;
-//     if (!volume.ReadSwapped(apploader_offset + 0x10, &apploader_entry, true) ||
-//         !volume.ReadSwapped(apploader_offset + 0x14, &apploader_size, true) ||
-//         apploader_entry == (u32)-1 || apploader_size == (u32)-1)
-//     {
-//       ERROR_LOG(BOOT, "Invalid apploader. Probably your image is corrupted.");
-//       return false;
-//     }
-//     DVDRead(apploader_offset + 0x20, 0x01200000, apploader_size, true);
-
-//     // call iAppLoaderEntry
-//     DEBUG_LOG(BOOT, "Call iAppLoaderEntry");
-
-//     u32 iAppLoaderFuncAddr = 0x80004000;
-//     PowerPC::ppcState.gpr[3] = iAppLoaderFuncAddr + 0;
-//     PowerPC::ppcState.gpr[4] = iAppLoaderFuncAddr + 4;
-//     PowerPC::ppcState.gpr[5] = iAppLoaderFuncAddr + 8;
-//     RunFunction(apploader_entry);
-//     u32 iAppLoaderInit = PowerPC::Read_U32(iAppLoaderFuncAddr + 0);
-//     u32 iAppLoaderMain = PowerPC::Read_U32(iAppLoaderFuncAddr + 4);
-//     u32 iAppLoaderClose = PowerPC::Read_U32(iAppLoaderFuncAddr + 8);
-
-//     // iAppLoaderInit
-//     DEBUG_LOG(BOOT, "Run iAppLoaderInit");
-//     PowerPC::ppcState.gpr[3] = 0x81300000;
-//     RunFunction(iAppLoaderInit);
-
-//     // Let the apploader load the exe to memory. At this point I get an unknown IPC command
-//     // (command zero) when I load Wii Sports or other games a second time. I don't notice
-//     // any side effects however. It's a little disconcerting however that Start after Stop
-//     // behaves differently than the first Start after starting Dolphin. It means something
-//     // was not reset correctly.
-//     DEBUG_LOG(BOOT, "Run iAppLoaderMain");
-//     do
-//     {
-//       PowerPC::ppcState.gpr[3] = 0x81300004;
-//       PowerPC::ppcState.gpr[4] = 0x81300008;
-//       PowerPC::ppcState.gpr[5] = 0x8130000c;
-
-//       RunFunction(iAppLoaderMain);
-
-//       u32 iRamAddress = PowerPC::Read_U32(0x81300004);
-//       u32 iLength = PowerPC::Read_U32(0x81300008);
-//       u32 iDVDOffset = PowerPC::Read_U32(0x8130000c) << 2;
-
-//       INFO_LOG(BOOT, "DVDRead: offset: %08x   memOffset: %08x   length: %i", iDVDOffset,
-//                iRamAddress, iLength);
-//       DVDRead(iDVDOffset, iRamAddress, iLength, true);
-//     } while (PowerPC::ppcState.gpr[3] != 0x00);
-
-//     // iAppLoaderClose
-//     DEBUG_LOG(BOOT, "Run iAppLoaderClose");
-//     RunFunction(iAppLoaderClose);
-
-//     apploaderRan = true;
-
-//     // Pass the "#002 check"
-//     // Apploader writes the IOS version and revision here, we copy it
-//     // Fake IOSv9 r2.4 if no version is found (elf loading)
-//     u32 firmwareVer = PowerPC::Read_U32(0x80003188);
-//     PowerPC::Write_U32(firmwareVer ? firmwareVer : 0x00090204, 0x80003140);
-
-//     // Load patches and run startup patches
-//     PatchEngine::LoadPatches();
-
-//     // return
-//     PC = PowerPC::ppcState.gpr[3];
-//   }
-
-//   return apploaderRan;
-// }
-
-// bool EmulatedBS2(bool _bIsWii)
-// {
-//   return _bIsWii ? EmulatedBS2_Wii() : EmulatedBS2_GC();
-// }
-
-void UpdateDebugger_MapLoaded()
+static void signal_handler(int)
 {
-  // Host_NotifyMapLoaded();
+  const char message[] = "A signal was received. A second signal will force Dolphin to stop.\n";
+  if (write(STDERR_FILENO, message, sizeof(message)) < 0)
+  {
+  }
+  s_shutdown_requested.Set();
 }
 
-bool FindMapFile(std::string* existing_map_file, std::string* writable_map_file,
-                        std::string* title_id = nullptr)
+namespace ProcessorInterface
 {
-  std::string title_id_str;
-  size_t name_begin_index;
-
-  SConfig& _StartupPara = SConfig::GetInstance();
-  switch (_StartupPara.m_BootType)
-  {
-  case SConfig::BOOT_WII_NAND:
-  {
-    const DiscIO::CNANDContentLoader& Loader =
-        DiscIO::CNANDContentManager::Access().GetNANDLoader(_StartupPara.m_strFilename);
-    if (Loader.IsValid())
-    {
-      u64 TitleID = Loader.GetTitleID();
-      title_id_str = StringFromFormat("%08X_%08X", (u32)(TitleID >> 32) & 0xFFFFFFFF,
-                                      (u32)TitleID & 0xFFFFFFFF);
-    }
-    break;
-  }
-
-  case SConfig::BOOT_ELF:
-  case SConfig::BOOT_DOL:
-    // Strip the .elf/.dol file extension and directories before the name
-    name_begin_index = _StartupPara.m_strFilename.find_last_of("/") + 1;
-    if ((_StartupPara.m_strFilename.find_last_of("\\") + 1) > name_begin_index)
-    {
-      name_begin_index = _StartupPara.m_strFilename.find_last_of("\\") + 1;
-    }
-    title_id_str = _StartupPara.m_strFilename.substr(
-        name_begin_index, _StartupPara.m_strFilename.size() - 4 - name_begin_index);
-    break;
-
-  default:
-    title_id_str = _StartupPara.GetGameID();
-    break;
-  }
-
-  if (writable_map_file)
-    *writable_map_file = File::GetUserPath(D_MAPS_IDX) + title_id_str + ".map";
-
-  if (title_id)
-    *title_id = title_id_str;
-
-  bool found = false;
-  static const std::string maps_directories[] = {File::GetUserPath(D_MAPS_IDX),
-                                                 File::GetSysDirectory() + MAPS_DIR DIR_SEP};
-  for (size_t i = 0; !found && i < ArraySize(maps_directories); ++i)
-  {
-    std::string path = maps_directories[i] + title_id_str + ".map";
-    if (File::Exists(path))
-    {
-      found = true;
-      if (existing_map_file)
-        *existing_map_file = path;
-    }
-  }
-
-  return found;
+void PowerButton_Tap();
 }
 
-bool LoadMapFromFilename()
+class Platform
 {
-  std::string strMapFilename;
-  bool found = FindMapFile(&strMapFilename, nullptr);
-  if (found && g_symbolDB.LoadMap(strMapFilename))
+public:
+  virtual void Init() {}
+  virtual void SetTitle(const std::string& title) {}
+  virtual void MainLoop()
   {
-    UpdateDebugger_MapLoaded();
-    return true;
+    while (s_running.IsSet())
+    {
+      Core::HostDispatchJobs();
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
   }
+  virtual void Shutdown() {}
+  virtual ~Platform() {}
+};
 
+static Platform* platform;
+
+void Host_NotifyMapLoaded()
+{
+}
+void Host_RefreshDSPDebuggerWindow()
+{
+}
+
+static Common::Event updateMainFrameEvent;
+void Host_Message(int Id)
+{
+  if (Id == WM_USER_STOP)
+  {
+    s_running.Clear();
+    updateMainFrameEvent.Set();
+  }
+}
+
+static void* s_window_handle = nullptr;
+void* Host_GetRenderHandle()
+{
+  return s_window_handle;
+}
+
+void Host_UpdateTitle(const std::string& title)
+{
+  platform->SetTitle(title);
+}
+
+void Host_UpdateDisasmDialog()
+{
+}
+
+void Host_UpdateMainFrame()
+{
+  updateMainFrameEvent.Set();
+}
+
+void Host_RequestRenderWindowSize(int width, int height)
+{
+}
+
+void Host_SetStartupDebuggingParameters()
+{
+  SConfig& StartUp = SConfig::GetInstance();
+  StartUp.bEnableDebugging = false;
+  StartUp.bBootToPause = false;
+}
+
+bool Host_UIHasFocus()
+{
   return false;
 }
 
-int main(int argc, char* argv[]) {
-  SConfig& _StartupPara = SConfig::GetInstance();
+bool Host_RendererHasFocus()
+{
+  return rendererHasFocus;
+}
 
-  CDolLoader dolLoader(_StartupPara.m_strFilename);
-  if (!dolLoader.IsValid())
-    return false;
-  
-  dolLoader.IsWii();
+bool Host_RendererIsFullscreen()
+{
+  return rendererIsFullscreen;
+}
 
-  // // Check if we have gotten a Wii file or not
-  // bool dolWii = dolLoader.IsWii();
-  // if (dolWii != _StartupPara.bWii)
-  // {
-  //   PanicAlertT("Warning - starting DOL in wrong console mode!");
-  // }
-
-  bool BS2Success = false;
-
-  // if (dolWii)
-  // {
-  //   BS2Success = EmulatedBS2(dolWii);
-  // }
-  // else if ((!DVDInterface::VolumeIsValid() ||
-  //           DVDInterface::GetVolume().GetVolumeType() != DiscIO::Platform::WII_DISC) &&
-  //           !_StartupPara.m_strDefaultISO.empty())
-  // {
-  //   DVDInterface::SetVolumeName(_StartupPara.m_strDefaultISO);
-  //   BS2Success = EmulatedBS2(dolWii);
-  // }
-
-  // if (!_StartupPara.m_strDVDRoot.empty())
-  // {
-  //   NOTICE_LOG(BOOT, "Setting DVDRoot %s", _StartupPara.m_strDVDRoot.c_str());
-  //   DVDInterface::SetVolumeDirectory(_StartupPara.m_strDVDRoot, dolWii,
-  //                                     _StartupPara.m_strApploader, _StartupPara.m_strFilename);
-  //   BS2Success = EmulatedBS2(dolWii);
-  // }
-
-  // DVDInterface::SetDiscInside(DVDInterface::VolumeIsValid());
-
-  if (!BS2Success)
+void Host_ConnectWiimote(int wm_idx, bool connect)
+{
+  if (Core::IsRunning() && SConfig::GetInstance().bWii &&
+      !SConfig::GetInstance().m_bt_passthrough_enabled)
   {
-    // Set up MSR and the BAT SPR registers.
-    UReg_MSR& m_MSR = ((UReg_MSR&)PowerPC::ppcState.msr);
-    m_MSR.FP = 1;
-    m_MSR.DR = 1;
-    m_MSR.IR = 1;
-    m_MSR.EE = 1;
-    PowerPC::ppcState.spr[SPR_IBAT0U] = 0x80001fff;
-    PowerPC::ppcState.spr[SPR_IBAT0L] = 0x00000002;
-    PowerPC::ppcState.spr[SPR_IBAT4U] = 0x90001fff;
-    PowerPC::ppcState.spr[SPR_IBAT4L] = 0x10000002;
-    PowerPC::ppcState.spr[SPR_DBAT0U] = 0x80001fff;
-    PowerPC::ppcState.spr[SPR_DBAT0L] = 0x00000002;
-    PowerPC::ppcState.spr[SPR_DBAT1U] = 0xc0001fff;
-    PowerPC::ppcState.spr[SPR_DBAT1L] = 0x0000002a;
-    PowerPC::ppcState.spr[SPR_DBAT4U] = 0x90001fff;
-    PowerPC::ppcState.spr[SPR_DBAT4L] = 0x10000002;
-    PowerPC::ppcState.spr[SPR_DBAT5U] = 0xd0001fff;
-    PowerPC::ppcState.spr[SPR_DBAT5L] = 0x1000002a;
-    if (dolLoader.IsWii())
-      HID4.SBE = 1;
-    PowerPC::DBATUpdated();
-    PowerPC::IBATUpdated();
+    Core::QueueHostJob([=] {
+      bool was_unpaused = Core::PauseAndLock(true);
+      GetUsbPointer()->AccessWiiMote(wm_idx | 0x100)->Activate(connect);
+      Host_UpdateMainFrame();
+      Core::PauseAndLock(false, was_unpaused);
+    });
+  }
+}
 
-    dolLoader.Load();
-    PC = dolLoader.GetEntryPoint();
+void Host_SetWiiMoteConnectionState(int _State)
+{
+}
+
+void Host_ShowVideoConfig(void*, const std::string&)
+{
+}
+
+void Host_YieldToUI()
+{
+}
+
+// void Host_Message(int something) {}
+
+static Platform* GetPlatform()
+{
+  return new Platform();
+}
+
+int main(int argc, char* argv[])
+{
+  int ch, help = 0;
+  struct option longopts[] = {{"exec", no_argument, nullptr, 'e'},
+                              {"help", no_argument, nullptr, 'h'},
+                              {"version", no_argument, nullptr, 'v'},
+                              {nullptr, 0, nullptr, 0}};
+
+  while ((ch = getopt_long(argc, argv, "eh?v", longopts, 0)) != -1)
+  {
+    switch (ch)
+    {
+    case 'e':
+      break;
+    case 'h':
+    case '?':
+      help = 1;
+      break;
+    case 'v':
+      fprintf(stderr, "%s\n", scm_rev_str.c_str());
+      return 1;
+    }
   }
 
-  if (LoadMapFromFilename())
-    HLE::PatchFunctions();
-  
+  if (help == 1 || argc == optind)
+  {
+    fprintf(stderr, "%s\n\n", scm_rev_str.c_str());
+    fprintf(stderr, "A multi-platform GameCube/Wii emulator\n\n");
+    fprintf(stderr, "Usage: %s [-e <file>] [-h] [-v]\n", argv[0]);
+    fprintf(stderr, "  -e, --exec     Load the specified file\n");
+    fprintf(stderr, "  -h, --help     Show this help message\n");
+    fprintf(stderr, "  -v, --version  Print version and exit\n");
+    return 1;
+  }
+
+  platform = GetPlatform();
+  if (!platform)
+  {
+    fprintf(stderr, "No platform found\n");
+    return 1;
+  }
+
+  // UICommon::SetUserDirectory("");  // Auto-detect user folder
+  // UICommon::Init();
+
+  Core::SetOnStoppedCallback([]() { s_running.Clear(); });
+  platform->Init();
+
+  // Shut down cleanly on SIGINT and SIGTERM
+  struct sigaction sa;
+  sa.sa_handler = signal_handler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESETHAND;
+  sigaction(SIGINT, &sa, nullptr);
+  sigaction(SIGTERM, &sa, nullptr);
+
+  DolphinAnalytics::Instance()->ReportDolphinStart("nogui");
+
+  if (!BootManager::BootCore(argv[optind]))
+  {
+    fprintf(stderr, "Could not boot %s\n", argv[optind]);
+    return 1;
+  }
+
+  while (!Core::IsRunning() && s_running.IsSet())
+  {
+    Core::HostDispatchJobs();
+    updateMainFrameEvent.Wait();
+  }
+
+  if (s_running.IsSet())
+    platform->MainLoop();
+  Core::Stop();
+
+  Core::Shutdown();
+  platform->Shutdown();
+  // UICommon::Shutdown();
+
+  delete platform;
+
   return 0;
 }

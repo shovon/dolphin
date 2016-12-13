@@ -268,5 +268,5 @@ if(PORTAUDIO_FOUND)
 	set(LIBS ${LIBS} ${PORTAUDIO_LIBRARIES})
 endif(PORTAUDIO_FOUND)
 
-add_subdirectory(ElfLoader)
+#add_subdirectory(ElfLoader)
 add_subdirectory(DolLoader)
